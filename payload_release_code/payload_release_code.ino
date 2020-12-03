@@ -35,7 +35,7 @@ void loop() {
     buttonStateOld = buttonState;
   }
   if(systemState) {
-    servo.write(45); // Set servo position to open.
+    servo.write(65); // Set servo position to open.
     delay(15);
   }
   else {
