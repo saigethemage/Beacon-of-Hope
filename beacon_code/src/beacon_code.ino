@@ -1,3 +1,29 @@
+/***********************************************************************
+ * Overview:
+ * 
+ * The inclusion of drone technology in search and rescue 
+ * operations has greatly decreased the time required to locate victims. 
+ * However, the time required for search and rescue personnel to 
+ * physically reach victims has gone unchanged. For search and rescue 
+ * victims, time is of the essence. The more time a victim spends 
+ * exposed to the elements or injury the less of a chance they have at 
+ * surviving. This project aims to develop a device that can be dropped 
+ * from an aerial vehicle to a victim’s location and provide the victim 
+ * with essential communication and first aid while waiting for search 
+ * and rescue personnel to arrive.
+ * 
+ * Technology:
+ * 
+ * This device interfaces with a MPU-6050 3-Axis Accelerometer Module, 
+ * a light emitting diode (LED), a BME-280 Barometric Pressure, 
+ * Temperature and Humidity Module, a GY_GPS6MV1 GPS Module, a ESP32_CAM
+ * Camera Module, and a PARTICLE Argon Development Board. All data is
+ * streamed to the ThingSpeak Internet of Things Platform.
+ * 
+ * Written by Saige Martinez for CNM Ingenuity's Deep Dive Coding
+ * Internet of Things Bootcamp.
+ **********************************************************************/
+
 #include <Wire.h>
 #include <SPI.h>
 #include <Adafruit_Sensor.h>
@@ -5,57 +31,67 @@
 #include <TinyGPS++/TinyGPS++.h>
 #include "ThingSpeak.h"
 
+// MPU-6050 Module
 const int MPU_ADDRESS = 0x68;
 float sensitivity, acceleration;
 
+// LED
 const int LED = 11;
 
+// BME-280 Module
 Adafruit_BME280 bme;
 
+//GY_GPS6MV1 Module
 TinyGPSPlus gps;
 
+// ThingSpeak Platform
 TCPClient client;
-
 unsigned long myChannelNumber = 1247589;
 const char * myWriteAPIKey = "IEZR5IICK5PD48VB";
 
+// Declare variables for handling system state, time, and data.
 bool accelState, accelStateOld, systemState;
 int currentTime, previousTime;
 float altitude, pressure, temperature, humidity, latitude, longitude;
 
 void setup() {
-  Serial.begin(9600);
-  Serial1.begin(9600);
-  beginMPU();
-  configureACC(3);
-  pinMode(LED, OUTPUT);
-  bme.begin();
-  ThingSpeak.begin(client);
+  Serial.begin(9600); // Serial communication to computer.
+  Serial1.begin(9600); // Serial communication to GY_GPS6MV1 module.
+  beginMPU(); // Setup for MPU-6050 module.
+  configureACC(3); // Configure MPU-6050 to measure +-16 g.
+  pinMode(LED, OUTPUT); // Setup for LED.
+  bme.begin(); // Setup for BME-280 module.
+  ThingSpeak.begin(client); // Setup for ThingSpeak platform.
 }
 
 void loop() {
-  accelState = readACC();
+  accelState = readACC(); // Check for impact with ground.
+  // If device makes impact with ground...
   if(accelState != accelStateOld) {
     if(accelState) {
-      systemState = !systemState;
+      systemState = !systemState; // ... activate device.
     }
     accelStateOld = accelState;
   }
 
   if(systemState) {
-    flashSOS();
+    flashSOS(); // Flash LED in SOS sequence.
     currentTime = millis();
-    while(Serial1.available() > 0) {
-      if(gps.encode(Serial1.read())) {
-        if(gps.location.isValid()) {
-          if((currentTime-previousTime) > 15000) {
-            Serial.println(".");
+    while(Serial1.available() > 0) { // Check for serial communication.
+      if(gps.encode(Serial1.read())) { // Check for GPS encoding.
+        if(gps.location.isValid()) { // Check for valid GPS encoding.
+          if((currentTime-previousTime) > 15000) { // Check if time exceeds 15 seconds.
+            // Print to serial monitor for verification.
+            Serial.print(".");
+            // Grab data points.
             altitude = bme.readAltitude(1013.25) * 3.28;
             pressure = bme.readPressure() / 100.0F;
             temperature = bme.readTemperature() * 1.8 + 32.0;
             humidity = bme.readHumidity();
             latitude = gps.location.lat();
             longitude = gps.location.lng();
+            // Stream to ThingSpeak platform.
+            // ThingSpeak will only accept updates every 15 seconds.
             ThingSpeak.setField(1, altitude);
             ThingSpeak.setField(2, pressure);
             ThingSpeak.setField(3, temperature);
@@ -168,7 +204,7 @@ bool readACC() {
   // Calculate total acceleration.
   accel = sqrt(pow(xCal, 2) + pow(yCal, 2) + pow(zCal, 2));
   
-  if(accel > 3) {
+  if(accel > 2) {
     return true;
   }
   else {
